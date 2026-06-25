@@ -1,4 +1,4 @@
-package org.task.pilot.handlers;
+package org.task.pilot.handler;
 
 import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
 import io.smallrye.mutiny.Uni;

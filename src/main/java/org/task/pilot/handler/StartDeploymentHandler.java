@@ -1,4 +1,4 @@
-package org.task.pilot.handlers;
+package org.task.pilot.handler;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;

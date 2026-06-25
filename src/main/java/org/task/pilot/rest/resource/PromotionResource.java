@@ -15,7 +15,7 @@ import org.task.pilot.domain.command.CompletePromotion;
 import org.task.pilot.domain.command.RequestPromotion;
 import org.task.pilot.domain.command.RollbackPromotion;
 import org.task.pilot.domain.command.StartDeployment;
-import org.task.pilot.handlers.CommandBus;
+import org.task.pilot.handler.CommandBus;
 import org.task.pilot.rest.dto.ApprovePromotionRequest;
 import org.task.pilot.rest.dto.CancelPromotionRequest;
 import org.task.pilot.rest.dto.RequestPromotionRequest;

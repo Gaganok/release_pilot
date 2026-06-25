@@ -1,5 +1,6 @@
 package org.task.pilot.domain.model;
 
+import io.smallrye.mutiny.Uni;
 import org.task.pilot.domain.event.DeploymentStarted;
 import org.task.pilot.domain.event.PromotionApproved;
 import org.task.pilot.domain.event.PromotionCancelled;
@@ -41,12 +42,12 @@ public record Promotion(UUID id,
     return onRequest(event);
   }
 
-  public Promotion approve(PromotionApproved event) {
+  public Uni<Promotion> approve(PromotionApproved event) {
     if (this.status != PENDING) {
-      throw new IllegalArgumentException("Promotion approved is not pending");
+      return Uni.createFrom().failure(new IllegalArgumentException("Promotion approved is not pending"));
     }
 
-    return onApprove(event);
+    return Uni.createFrom().item(onApprove(event));
   }
 
   public Promotion started(DeploymentStarted event) {
@@ -155,7 +156,7 @@ public record Promotion(UUID id,
 
   public static Promotion empty() {
     return new Promotion(randomUUID(), null, null,
-        NONE, NONE, null, now(), PENDING);
+        NONE, NONE, null, now(), EMPTY);
   }
 
 }

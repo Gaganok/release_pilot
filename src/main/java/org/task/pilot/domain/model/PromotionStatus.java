@@ -1,6 +1,7 @@
 package org.task.pilot.domain.model;
 
 public enum PromotionStatus {
+  EMPTY,
   PENDING,
   APPROVED,
   DEPLOYING,

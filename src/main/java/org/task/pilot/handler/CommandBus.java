@@ -1,4 +1,4 @@
-package org.task.pilot.handlers;
+package org.task.pilot.handler;
 
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;

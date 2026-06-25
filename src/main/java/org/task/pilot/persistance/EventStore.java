@@ -20,7 +20,7 @@ public class EventStore {
   }
 
   public Uni<Void> append(PromotionEvent event, EventType type) {
-    return nextVersion(event.applicationId())
+    return nextVersion(event.promotionId())
         .map(version -> EventEntity.from(event.promotionId(), type, version, serialise(event)))
         .flatMap(entity -> entity.persist())
         .replaceWithVoid()

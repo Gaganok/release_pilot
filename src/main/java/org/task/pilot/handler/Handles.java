@@ -1,4 +1,4 @@
-package org.task.pilot.handlers;
+package org.task.pilot.handler;
 
 import org.task.pilot.domain.command.Command;
 
