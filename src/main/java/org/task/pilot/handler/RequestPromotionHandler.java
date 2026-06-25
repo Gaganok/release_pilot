@@ -6,6 +6,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import org.task.pilot.domain.command.RequestPromotion;
 import org.task.pilot.domain.event.PromotionRequested;
 import org.task.pilot.domain.model.Environment;
+import org.task.pilot.domain.model.Promotion;
 import org.task.pilot.persistance.ApplicationState;
 import org.task.pilot.persistance.EventStore;
 
@@ -14,8 +15,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.task.pilot.exception.Thrower.webThrow;
 import static org.task.pilot.persistance.EventType.REQUESTED;
-import static org.task.pilot.persistance.SlotStatus.EMPTY;
+import static org.task.pilot.persistance.SlotStatus.IN_PROGRESS;
 
 @ApplicationScoped
 public class RequestPromotionHandler implements CommandHandler<RequestPromotion, UUID> {
@@ -50,18 +52,33 @@ public class RequestPromotionHandler implements CommandHandler<RequestPromotion,
     }
 
     var slot = slotOpt.get();
-    if (slot.slotStatus != EMPTY) {
-      return Uni.createFrom().failure(new IllegalStateException(
-          "Another promotion (%s) is already in progress for this environment".formatted(slot.activePromotionId)));
+    if (slot.slotStatus != IN_PROGRESS) {
+      return Uni.createFrom().voidItem();
     }
 
-    return Uni.createFrom().voidItem();
+    return Uni.createFrom().failure(webThrow("Another promotion (%s) is already in progress for this environment".formatted(slot.activePromotionId)));
   }
 
   private Uni<Environment> deriveSourceAndValidateOrder(RequestPromotion command) {
     return ApplicationState.findCompletedFor(command.applicationId(), command.applicationVersion())
+        .call(completedSlots -> validateVersionDuplicate(completedSlots, command))
         .map(this::findHighestCompletedEnvironment)
         .flatMap(source -> validateDirectSuccessor(source, command.targetEnvironment()));
+  }
+
+  private Uni<Void> validateVersionDuplicate(List<ApplicationState> completedSlots, RequestPromotion command) {
+    var maybePreviouslyPromoted = completedSlots.stream()
+        .filter(slot -> command.applicationVersion().equals(slot.completedVersion))
+        .filter(slot -> slot.environment == command.targetEnvironment())
+        .findFirst();
+
+    if (maybePreviouslyPromoted.isPresent()) {
+      return Uni.createFrom().failure(
+          webThrow("Promotion of version %s was already performed by %s"
+              .formatted(command.applicationVersion(), maybePreviouslyPromoted.get().activePromotionId)));
+    }
+
+    return Uni.createFrom().voidItem();
   }
 
   private Environment findHighestCompletedEnvironment(List<ApplicationState> completedSlots) {
@@ -73,15 +90,15 @@ public class RequestPromotionHandler implements CommandHandler<RequestPromotion,
 
   private Uni<Environment> validateDirectSuccessor(Environment source, Environment target) {
     if (!target.isDirectSuccessor(source)) {
-      return Uni.createFrom().failure(new IllegalArgumentException(
-          "Invalid environment transition: %s → %s".formatted(source, target)));
+      return Uni.createFrom().failure(webThrow("Invalid environment transition: %s → %s".formatted(source, target)));
     }
     return Uni.createFrom().item(source);
   }
 
   private Uni<PromotionRequested> storeEvent(RequestPromotion command) {
     var event = command.toEvent();
-    return eventStore.append(event, REQUESTED)
+    return Promotion.empty().request(event)
+        .chain(_ -> eventStore.append(event, REQUESTED))
         .flatMap(_ -> ApplicationState.apply(event.applicationId(), event))
         .replaceWith(event);
   }

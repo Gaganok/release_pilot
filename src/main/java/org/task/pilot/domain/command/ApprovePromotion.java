@@ -13,11 +13,6 @@ public record ApprovePromotion(
 ) implements Command<Void> {
   public PromotionApproved toEvent(Promotion promotion) {
     return new PromotionApproved(
-        promotionId,
-        promotion.applicationId(),
-        promotion.target(),
-        approverId,
-        Instant.now()
-    );
+        promotionId, promotion.applicationId(), promotion.target(), approverId, Instant.now());
   }
 }

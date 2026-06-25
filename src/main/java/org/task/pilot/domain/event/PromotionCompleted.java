@@ -9,6 +9,7 @@ public record PromotionCompleted(
     UUID promotionId,
     UUID applicationId,
     Environment targetEnvironment,
+    String applicationVersion,
     Instant occurredAt
 ) implements PromotionEvent {
 }

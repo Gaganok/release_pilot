@@ -17,11 +17,11 @@ import static java.time.Instant.now;
 import static java.util.UUID.randomUUID;
 import static org.task.pilot.domain.model.Environment.NONE;
 import static org.task.pilot.domain.model.PromotionStatus.*;
+import static org.task.pilot.exception.Thrower.webThrow;
 
 public record Promotion(UUID id,
                         UUID applicationId,
                         String applicationVersion,
-                        Environment source,
                         Environment target,
                         UUID requestedBy,
                         Instant requestedAt,
@@ -37,77 +37,67 @@ public record Promotion(UUID id,
     return promotion;
   }
 
-  public Promotion request(PromotionRequested event) {
-    enforceEnvironmentOrder(event.targetEnvironment());
-    return onRequest(event);
+  public Uni<Promotion> request(PromotionRequested event) {
+    return enforceEnvironmentOrder().replaceWith(onRequest(event));
   }
 
   public Uni<Promotion> approve(PromotionApproved event) {
     if (this.status != PENDING) {
-      return Uni.createFrom().failure(new IllegalArgumentException("Promotion approved is not pending"));
+      return Uni.createFrom().failure(webThrow("Promotion approved is not pending"));
     }
 
     return Uni.createFrom().item(onApprove(event));
   }
 
-  public Promotion started(DeploymentStarted event) {
+  public Uni<Promotion> deploy(DeploymentStarted event) {
     if (this.status != APPROVED) {
-      throw new IllegalArgumentException("Promotion should be in approved status to start deployment");
+      return Uni.createFrom().failure(webThrow("Promotion should be in approved status to start deployment"));
     }
 
-    return onStarted(event);
+    return Uni.createFrom().item(onDeploy(event));
   }
 
-  public Promotion complete(PromotionCompleted event) {
+  public Uni<Promotion> complete(PromotionCompleted event) {
     if (this.status != DEPLOYING) {
-      throw new IllegalArgumentException("Promotion should deploying to complete");
+      return Uni.createFrom().failure(webThrow("Promotion should deploying to complete"));
     }
-    return onComplete(event);
+    return Uni.createFrom().item(onComplete(event));
   }
 
-  public Promotion rollback(PromotionRolledBack event) {
-    if (this.status != COMPLETED) {
-      throw new IllegalArgumentException("Promotion should be completed status to rollback");
+  public Uni<Promotion> rollback(PromotionRolledBack event) {
+    if (this.status != DEPLOYING) {
+      return Uni.createFrom().failure(webThrow("Promotion deployment should start to rollback"));
     }
 
-    return onRollback(event);
+    return Uni.createFrom().item(onRollback(event));
   }
 
-  public Promotion cancel(PromotionCancelled event) {
+  public Uni<Promotion> cancel(PromotionCancelled event) {
     if (this.status.isTerminal()) {
-      throw new IllegalArgumentException("Promotion is already in terminal state: " + this.status);
+      return Uni.createFrom()
+          .failure(webThrow("Promotion is in terminal state: %s".formatted(this.status)));
     }
 
-    return onCancel(event);
+    return Uni.createFrom().item(onCancel(event));
   }
 
-  private void enforceEnvironmentOrder(Environment target) {
+  private Uni<Void> enforceEnvironmentOrder() {
     if (this.status.isTerminal()) {
-      throw new IllegalStateException("Cannot request promotion from terminal state: " + this.status);
+      return Uni.createFrom()
+          .failure(webThrow("Cannot request promotion from terminal state: %s".formatted(this.status)));
     }
 
     if (this.status == DEPLOYING) {
-      throw new IllegalStateException("Cannot request a new promotion while deploying: " + this.status);
+      return Uni.createFrom().failure(
+          webThrow("Cannot request a new promotion while deploying: %s".formatted(this.status)));
     }
 
-    if (target.isDirectSuccessor(this.source)) {
-      throw new IllegalArgumentException("Invalid environment transition: " + this.source + " -> " + target);
-    }
-  }
-
-  private Promotion withTarget(Environment target) {
-    return new Promotion(this.id, this.applicationId, this.applicationVersion, this.source,
-        target, this.requestedBy, this.requestedAt, this.status);
+    return Uni.createFrom().voidItem();
   }
 
   private Promotion withStatus(PromotionStatus status) {
-    return new Promotion(this.id, this.applicationId, this.applicationVersion, this.source,
+    return new Promotion(this.id, this.applicationId, this.applicationVersion,
         this.target, this.requestedBy, this.requestedAt, status);
-  }
-
-  private Promotion withRequestedBy(UUID requestedBy) {
-    return new Promotion(this.id, this.applicationId, this.applicationVersion, this.source,
-        this.target, requestedBy, this.requestedAt, this.status);
   }
 
   private Promotion onRequest(PromotionRequested event) {
@@ -115,7 +105,6 @@ public record Promotion(UUID id,
         event.promotionId(),
         event.applicationId(),
         event.applicationVersion(),
-        this.source,
         event.targetEnvironment(),
         event.requestedBy(),
         event.occurredAt(),
@@ -127,7 +116,7 @@ public record Promotion(UUID id,
     return this.withStatus(APPROVED);
   }
 
-  private Promotion onStarted(DeploymentStarted event) {
+  private Promotion onDeploy(DeploymentStarted event) {
     return this.withStatus(DEPLOYING);
   }
 
@@ -147,7 +136,7 @@ public record Promotion(UUID id,
     return switch (event) {
       case PromotionRequested e -> onRequest(e);
       case PromotionApproved e -> onApprove(e);
-      case DeploymentStarted e -> onStarted(e);
+      case DeploymentStarted e -> onDeploy(e);
       case PromotionCompleted e -> onComplete(e);
       case PromotionRolledBack e -> onRollback(e);
       case PromotionCancelled e -> onCancel(e);
@@ -156,7 +145,7 @@ public record Promotion(UUID id,
 
   public static Promotion empty() {
     return new Promotion(randomUUID(), null, null,
-        NONE, NONE, null, now(), EMPTY);
+        NONE, null, now(), EMPTY);
   }
 
 }

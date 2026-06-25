@@ -5,6 +5,8 @@ import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.task.pilot.domain.command.ApprovePromotion;
 import org.task.pilot.domain.model.Promotion;
+import org.task.pilot.messaging.DomainEventPublisher;
+import org.task.pilot.persistance.ApplicationState;
 import org.task.pilot.persistance.ApproverRepository;
 import org.task.pilot.persistance.EventStore;
 
@@ -15,10 +17,12 @@ public class ApprovePromotionHandler implements CommandHandler<ApprovePromotion,
 
   private final ApproverRepository approverRepository;
   private final EventStore eventStore;
+  private final DomainEventPublisher eventPublisher;
 
-  public ApprovePromotionHandler(ApproverRepository approverRepository, EventStore eventStore) {
+  public ApprovePromotionHandler(ApproverRepository approverRepository, EventStore eventStore, DomainEventPublisher eventPublisher) {
     this.approverRepository = approverRepository;
     this.eventStore = eventStore;
+    this.eventPublisher = eventPublisher;
   }
 
   @WithTransaction
@@ -41,6 +45,8 @@ public class ApprovePromotionHandler implements CommandHandler<ApprovePromotion,
   public Uni<Void> validateAndStore(Promotion promotion, ApprovePromotion command) {
     var event = command.toEvent(promotion);
     return promotion.approve(event)
-        .chain(_ -> eventStore.append(event, APPROVED));
+        .chain(_ -> eventStore.append(event, APPROVED))
+        .chain(_ -> eventPublisher.publish(promotion, event, APPROVED))
+        .flatMap(_ -> ApplicationState.apply(event.applicationId(), event));
   }
 }

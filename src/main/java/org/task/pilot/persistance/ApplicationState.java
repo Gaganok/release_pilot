@@ -1,13 +1,11 @@
 package org.task.pilot.persistance;
 
 import io.quarkus.hibernate.reactive.panache.PanacheEntity;
-import io.quarkus.hibernate.reactive.panache.PanacheEntityBase;
 import io.smallrye.mutiny.Uni;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import org.task.pilot.domain.event.DeploymentStarted;
 import org.task.pilot.domain.event.PromotionApproved;
 import org.task.pilot.domain.event.PromotionCancelled;
@@ -27,13 +25,17 @@ import static org.task.pilot.persistance.SlotStatus.COMPLETED;
 import static org.task.pilot.persistance.SlotStatus.IN_PROGRESS;
 
 @Entity
-@Table(name = "application_state",
-    uniqueConstraints = {
-        @UniqueConstraint(
-            name = "uk_application_env",
-            columnNames = {"application_id", "environment"}
-        )
-    })
+@Table(
+    name = "application_state",
+    indexes = {
+//        @Index(
+//            name = "uk_application_env_active",
+//            columnList = "application_id, environment",
+//            unique = true,
+//            options = "where slot <> 'COMPLETED'"
+//        )
+    }
+)
 public class ApplicationState extends PanacheEntity {
 
   @Column(name = "application_id", nullable = false, columnDefinition = "uuid")
@@ -44,7 +46,7 @@ public class ApplicationState extends PanacheEntity {
   public Environment environment;
 
   @Enumerated(STRING)
-  @Column(nullable = false)
+  @Column(name = "slot", nullable = false)
   public SlotStatus slotStatus;
 
   @Column(name = "active_promotion_id", columnDefinition = "uuid")
@@ -68,13 +70,14 @@ public class ApplicationState extends PanacheEntity {
   public static Uni<Void> apply(UUID applicationId, PromotionEvent event) {
     return switch (event) {
       case PromotionRequested e -> createSlot(applicationId, e);
-      case PromotionCompleted e -> updateState(applicationId, e.targetEnvironment(), slot -> {
-        slot.slotStatus = COMPLETED;
-        slot.activePromotionId = null;
-      });
       case PromotionCancelled e -> deleteSlot(applicationId, e.targetEnvironment());
       case PromotionRolledBack e -> deleteSlot(applicationId, e.targetEnvironment());
       case PromotionApproved _, DeploymentStarted _ -> Uni.createFrom().voidItem();
+      case PromotionCompleted e -> updateState(applicationId, e.targetEnvironment(),
+          slot -> {
+            slot.slotStatus = COMPLETED;
+            slot.completedVersion = e.applicationVersion();
+          });
     };
   }
 
@@ -97,10 +100,7 @@ public class ApplicationState extends PanacheEntity {
   }
 
   private static Uni<Void> deleteSlot(UUID applicationId, Environment environment) {
-    return findOrEmpty(applicationId, environment)
-        .map(maybeSlot -> maybeSlot.orElseThrow(() ->
-            new IllegalStateException("No slot to delete for %s -> %s".formatted(applicationId, environment))))
-        .flatMap(PanacheEntityBase::delete)
+    return delete("applicationId = ?1 AND environment = ?2", applicationId, environment)
         .replaceWithVoid();
   }
 }
