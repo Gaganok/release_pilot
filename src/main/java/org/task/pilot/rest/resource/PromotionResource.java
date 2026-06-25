@@ -84,6 +84,6 @@ public class PromotionResource {
         .map(ignored -> Response.accepted().build());
   }
 
-  public record IdResponse(Long id) {
+  public record IdResponse(UUID id) {
   }
 }

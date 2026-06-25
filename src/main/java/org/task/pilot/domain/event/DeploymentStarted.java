@@ -10,5 +10,6 @@ public record DeploymentStarted(
     UUID applicationId,
     Environment targetEnvironment,
     String deploymentReference,
-    Instant occurredAt) implements PromotionEvent {
+    Instant occurredAt
+) implements PromotionEvent {
 }

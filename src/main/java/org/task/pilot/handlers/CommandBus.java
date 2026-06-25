@@ -18,14 +18,7 @@ public class CommandBus {
 
   public CommandBus(Instance<CommandHandler<?, ?>> handlers) {
     this.registry = handlers.stream()
-        .collect(toMap(this::commandType, identity(), this::duplicateHandler));
-  }
-
-  private Class<? extends Command<?>> commandType(CommandHandler<?, ?> handler) {
-    return Optional.ofNullable(handler.getClass().getAnnotation(Handles.class))
-        .map(Handles::value)
-        .orElseThrow(() -> new IllegalStateException(
-            "%s is missing @Handles".formatted(handler.getClass().getSimpleName())));
+        .collect(toMap(CommandHandler::supports, identity(), this::duplicateHandler));
   }
 
   private CommandHandler<?, ?> duplicateHandler(CommandHandler<?, ?> left, CommandHandler<?, ?> right) {
@@ -38,7 +31,6 @@ public class CommandBus {
     return Optional.ofNullable(registry.get(command.getClass()))
         .map(handler -> ((CommandHandler<Command<R>, R>) handler).handle(command))
         .orElseGet(() -> Uni.createFrom().failure(new IllegalStateException(
-            "No handler found for %s".formatted(command.getClass().getSimpleName())
-        )));
+            "No handler found for %s".formatted(command.getClass().getSimpleName()))));
   }
 }

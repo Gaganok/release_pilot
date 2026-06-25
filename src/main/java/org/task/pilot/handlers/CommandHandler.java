@@ -5,4 +5,6 @@ import org.task.pilot.domain.command.Command;
 
 public interface CommandHandler<C extends Command<R>, R> {
   Uni<R> handle(C command);
+
+  Class<C> supports();
 }

@@ -9,7 +9,6 @@ import org.task.pilot.domain.event.PromotionRequested;
 import org.task.pilot.domain.event.PromotionRolledBack;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -25,14 +24,13 @@ public record Promotion(UUID id,
                         Environment target,
                         UUID requestedBy,
                         Instant requestedAt,
-                        PromotionStatus status,
-                        List<PromotionEvent> events) {
+                        PromotionStatus status) {
 
   public static Promotion reconstruct(List<PromotionEvent> events) {
     var promotion = empty();
 
     for (var event : events) {
-      promotion = promotion.apply(event).addEvent(event);
+      promotion = promotion.apply(event);
     }
 
     return promotion;
@@ -40,7 +38,7 @@ public record Promotion(UUID id,
 
   public Promotion request(PromotionRequested event) {
     enforceEnvironmentOrder(event.targetEnvironment());
-    return onRequest(event).addEvent(event);
+    return onRequest(event);
   }
 
   public Promotion approve(PromotionApproved event) {
@@ -48,7 +46,7 @@ public record Promotion(UUID id,
       throw new IllegalArgumentException("Promotion approved is not pending");
     }
 
-    return onApprove(event).addEvent(event);
+    return onApprove(event);
   }
 
   public Promotion started(DeploymentStarted event) {
@@ -56,14 +54,14 @@ public record Promotion(UUID id,
       throw new IllegalArgumentException("Promotion should be in approved status to start deployment");
     }
 
-    return onStarted(event).addEvent(event);
+    return onStarted(event);
   }
 
   public Promotion complete(PromotionCompleted event) {
     if (this.status != DEPLOYING) {
       throw new IllegalArgumentException("Promotion should deploying to complete");
     }
-    return onComplete(event).addEvent(event);
+    return onComplete(event);
   }
 
   public Promotion rollback(PromotionRolledBack event) {
@@ -71,15 +69,15 @@ public record Promotion(UUID id,
       throw new IllegalArgumentException("Promotion should be completed status to rollback");
     }
 
-    return onRollback(event).addEvent(event);
+    return onRollback(event);
   }
 
   public Promotion cancel(PromotionCancelled event) {
     if (this.status.isTerminal()) {
       throw new IllegalArgumentException("Promotion is already in terminal state: " + this.status);
     }
-    
-    return onCancel(event).addEvent(event);
+
+    return onCancel(event);
   }
 
   private void enforceEnvironmentOrder(Environment target) {
@@ -91,34 +89,24 @@ public record Promotion(UUID id,
       throw new IllegalStateException("Cannot request a new promotion while deploying: " + this.status);
     }
 
-    if (!target.isDirectSuccessor(this.source)) {
+    if (target.isDirectSuccessor(this.source)) {
       throw new IllegalArgumentException("Invalid environment transition: " + this.source + " -> " + target);
     }
   }
 
   private Promotion withTarget(Environment target) {
     return new Promotion(this.id, this.applicationId, this.applicationVersion, this.source,
-        target, this.requestedBy, this.requestedAt, this.status, this.events);
+        target, this.requestedBy, this.requestedAt, this.status);
   }
 
   private Promotion withStatus(PromotionStatus status) {
     return new Promotion(this.id, this.applicationId, this.applicationVersion, this.source,
-        this.target, this.requestedBy, this.requestedAt, status, this.events);
+        this.target, this.requestedBy, this.requestedAt, status);
   }
 
   private Promotion withRequestedBy(UUID requestedBy) {
     return new Promotion(this.id, this.applicationId, this.applicationVersion, this.source,
-        this.target, requestedBy, this.requestedAt, this.status, this.events);
-  }
-
-  private Promotion withEvents(List<PromotionEvent> events) {
-    return new Promotion(this.id, this.applicationId, this.applicationVersion, this.source,
-        this.target, this.requestedBy, this.requestedAt, this.status, events);
-  }
-
-  private Promotion addEvent(PromotionEvent event) {
-    this.events.add(event);
-    return this;
+        this.target, requestedBy, this.requestedAt, this.status);
   }
 
   private Promotion onRequest(PromotionRequested event) {
@@ -130,8 +118,7 @@ public record Promotion(UUID id,
         event.targetEnvironment(),
         event.requestedBy(),
         event.occurredAt(),
-        PENDING,
-        this.events
+        PENDING
     );
   }
 
@@ -166,9 +153,9 @@ public record Promotion(UUID id,
     };
   }
 
-  private static Promotion empty() {
+  public static Promotion empty() {
     return new Promotion(randomUUID(), null, null,
-        NONE, NONE, null, now(), PENDING, new ArrayList<>());
+        NONE, NONE, null, now(), PENDING);
   }
 
 }
