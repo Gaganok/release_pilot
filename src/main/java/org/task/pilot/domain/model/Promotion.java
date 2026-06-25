@@ -61,7 +61,7 @@ public record Promotion(UUID id,
 
   public Uni<Promotion> complete(PromotionCompleted event) {
     if (this.status != DEPLOYING) {
-      return Uni.createFrom().failure(webThrow("Promotion should deploying to complete"));
+      return Uni.createFrom().failure(webThrow("Promotion should be deploying prior to completion"));
     }
     return Uni.createFrom().item(onComplete(event));
   }

@@ -23,6 +23,26 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
 
+  app:
+    build:
+      context: ../../..
+      dockerfile: src/main/docker/Dockerfile.jvm
+    container_name: release-pilot-app
+    depends_on:
+      - postgres
+      - rabbitmq
+    ports:
+      - "8080:8080"
+    environment:
+      QUARKUS_DATASOURCE_DB_KIND: postgresql
+      QUARKUS_DATASOURCE_USERNAME: release_user
+      QUARKUS_DATASOURCE_PASSWORD: release_pass
+      QUARKUS_DATASOURCE_REACTIVE_URL: postgresql://postgres:5432/release_pilot
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: release_user
+      RABBITMQ_PASSWORD: release_pass
+
 volumes:
   postgres_data:
   rabbitmq_data:

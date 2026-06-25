@@ -47,7 +47,7 @@ public class ApprovePromotionHandler implements CommandHandler<ApprovePromotion,
     var event = command.toEvent(promotion);
     return promotion.approve(event)
         .chain(_ -> eventStore.append(event, APPROVED))
-        .chain(_ -> eventPublisher.publish(promotion, event, APPROVED))
-        .flatMap(_ -> ApplicationState.apply(event.applicationId(), event));
+        .chain(_ -> ApplicationState.apply(event.applicationId(), event))
+        .chain(_ -> eventPublisher.publish(promotion, event, APPROVED));
   }
 }

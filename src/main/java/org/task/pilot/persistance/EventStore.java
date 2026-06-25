@@ -22,6 +22,7 @@ public class EventStore {
     this.objectMapper = objectMapper;
   }
 
+  @WithTransaction
   public Uni<Void> append(PromotionEvent event, EventType type) {
     return nextVersion(event.promotionId())
         .map(version -> EventEntity.from(event.promotionId(), event.applicationId(), type, version, serialise(event)))
