@@ -5,10 +5,11 @@ import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.task.pilot.domain.command.CancelPromotion;
 import org.task.pilot.domain.model.Promotion;
+import org.task.pilot.persistance.ApplicationState;
 import org.task.pilot.persistance.EventStore;
 import org.task.pilot.port.NotificationPort;
 
-import static org.task.pilot.persistance.EventType.STARTED;
+import static org.task.pilot.persistance.EventType.CANCELLED;
 
 @ApplicationScoped
 public class CancelPromotionHandler implements CommandHandler<CancelPromotion, Void> {
@@ -39,7 +40,8 @@ public class CancelPromotionHandler implements CommandHandler<CancelPromotion, V
   public Uni<Void> validateAndStore(Promotion promotion, CancelPromotion command) {
     var event = command.toEvent(promotion);
     return promotion.cancel(event)
-        .chain(_ -> eventStore.append(event, STARTED));
+        .chain(_ -> eventStore.append(event, CANCELLED))
+        .flatMap(_ -> ApplicationState.apply(event.applicationId(), event));
   }
 
 }

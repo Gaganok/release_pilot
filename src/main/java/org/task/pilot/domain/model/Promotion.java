@@ -11,6 +11,7 @@ import org.task.pilot.domain.event.PromotionRolledBack;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static java.time.Instant.now;
@@ -24,6 +25,7 @@ public record Promotion(UUID id,
                         String applicationVersion,
                         Environment target,
                         UUID requestedBy,
+                        Optional<UUID> approvedBy,
                         Instant requestedAt,
                         PromotionStatus status) {
 
@@ -97,7 +99,12 @@ public record Promotion(UUID id,
 
   private Promotion withStatus(PromotionStatus status) {
     return new Promotion(this.id, this.applicationId, this.applicationVersion,
-        this.target, this.requestedBy, this.requestedAt, status);
+        this.target, this.requestedBy, this.approvedBy, this.requestedAt, status);
+  }
+
+  private Promotion withApprovedBy(UUID approvedBy) {
+    return new Promotion(this.id, this.applicationId, this.applicationVersion,
+        this.target, this.requestedBy, Optional.of(approvedBy), this.requestedAt, this.status);
   }
 
   private Promotion onRequest(PromotionRequested event) {
@@ -107,13 +114,14 @@ public record Promotion(UUID id,
         event.applicationVersion(),
         event.targetEnvironment(),
         event.requestedBy(),
+        Optional.empty(),
         event.occurredAt(),
         PENDING
     );
   }
 
   private Promotion onApprove(PromotionApproved event) {
-    return this.withStatus(APPROVED);
+    return this.withStatus(APPROVED).withApprovedBy(event.approvedBy());
   }
 
   private Promotion onDeploy(DeploymentStarted event) {
@@ -132,7 +140,7 @@ public record Promotion(UUID id,
     return this.withStatus(CANCELLED);
   }
 
-  private Promotion apply(PromotionEvent event) {
+  public Promotion apply(PromotionEvent event) {
     return switch (event) {
       case PromotionRequested e -> onRequest(e);
       case PromotionApproved e -> onApprove(e);
@@ -145,7 +153,7 @@ public record Promotion(UUID id,
 
   public static Promotion empty() {
     return new Promotion(randomUUID(), null, null,
-        NONE, null, now(), EMPTY);
+        NONE, null, Optional.empty(), now(), EMPTY);
   }
 
 }

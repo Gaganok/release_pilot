@@ -5,7 +5,9 @@ import io.smallrye.mutiny.Uni;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.UpdateTimestamp;
 import org.task.pilot.domain.event.DeploymentStarted;
 import org.task.pilot.domain.event.PromotionApproved;
 import org.task.pilot.domain.event.PromotionCancelled;
@@ -14,7 +16,9 @@ import org.task.pilot.domain.event.PromotionEvent;
 import org.task.pilot.domain.event.PromotionRequested;
 import org.task.pilot.domain.event.PromotionRolledBack;
 import org.task.pilot.domain.model.Environment;
+import org.task.pilot.service.projection.EnvironmentStatus;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,6 +32,14 @@ import static org.task.pilot.persistance.SlotStatus.IN_PROGRESS;
 @Table(
     name = "application_state",
     indexes = {
+        @Index(
+            name = "idx_application_env_timestamp",
+            columnList = "application_id, environment, timestamp DESC"
+        ),
+        @Index(
+            name = "idx_application_completed_version",
+            columnList = "application_id, completed_version, slot"
+        )
 //        @Index(
 //            name = "uk_application_env_active",
 //            columnList = "application_id, environment",
@@ -55,6 +67,9 @@ public class ApplicationState extends PanacheEntity {
   @Column(name = "completed_version")
   public String completedVersion;
 
+  @UpdateTimestamp
+  public Instant timestamp;
+
   public static Uni<Optional<ApplicationState>> findOrEmpty(UUID applicationId, Environment environment) {
     return find("applicationId = ?1 AND environment = ?2", applicationId, environment)
         .firstResult()
@@ -64,6 +79,22 @@ public class ApplicationState extends PanacheEntity {
   public static Uni<List<ApplicationState>> findCompletedFor(UUID applicationId, String version) {
     return find(
         "applicationId = ?1 AND completedVersion = ?2 AND slotStatus = ?3", applicationId, version, COMPLETED)
+        .list();
+  }
+
+  public static Uni<List<EnvironmentStatus>> findLatestStatusPerEnv(UUID applicationId) {
+    return find("""
+        select a.environment, a.slotStatus, a.activePromotionId, a.completedVersion 
+        from ApplicationState a 
+        where a.applicationId = ?1 
+        and a.timestamp = ( 
+            select max(sub.timestamp) 
+            from ApplicationState sub 
+            where sub.applicationId = a.applicationId 
+            and sub.environment = a.environment
+        )
+        """, applicationId)
+        .project(EnvironmentStatus.class)
         .list();
   }
 

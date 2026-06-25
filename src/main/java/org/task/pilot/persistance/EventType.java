@@ -21,4 +21,13 @@ public enum EventType {
   EventType(Class<? extends PromotionEvent> clazz) {
     this.clazz = clazz;
   }
+
+  public static EventType from(Class<? extends PromotionEvent> clazz) {
+    for (EventType eventType : EventType.values()) {
+      if (eventType.clazz.equals(clazz)) {
+        return eventType;
+      }
+    }
+    throw new IllegalArgumentException("No such event type " + clazz.getSimpleName());
+  }
 }

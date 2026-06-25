@@ -23,12 +23,19 @@ import static jakarta.persistence.EnumType.STRING;
     },
     indexes = {
         @Index(name = "idx_event_aggregate", columnList = "aggregate_id, version"),
-        @Index(name = "idx_event_type", columnList = "eventType")
+        @Index(name = "idx_event_type", columnList = "eventType"),
+        @Index(
+            name = "idx_event_application_history",
+            columnList = "application_id, timestamp DESC, version DESC"
+        )
     })
 public class EventEntity extends PanacheEntity {
 
   @Column(name = "aggregate_id", nullable = false, columnDefinition = "uuid")
   public UUID aggregateId;
+
+  @Column(name = "application_id", nullable = false, columnDefinition = "uuid")
+  public UUID applicationId;
 
   @Column(nullable = false)
   public long version;
@@ -42,9 +49,10 @@ public class EventEntity extends PanacheEntity {
   @Column(nullable = false)
   public Instant timestamp;
 
-  public static EventEntity from(UUID aggregateId, EventType type, long version, String data) {
+  public static EventEntity from(UUID aggregateId, UUID applicationId, EventType type, long version, String data) {
     var event = new EventEntity();
     event.aggregateId = aggregateId;
+    event.applicationId = applicationId;
     event.version = version;
     event.eventType = type;
     event.data = data;

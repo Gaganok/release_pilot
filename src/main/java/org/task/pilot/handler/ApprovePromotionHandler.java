@@ -10,6 +10,7 @@ import org.task.pilot.persistance.ApplicationState;
 import org.task.pilot.persistance.ApproverRepository;
 import org.task.pilot.persistance.EventStore;
 
+import static org.task.pilot.exception.Thrower.webForbidden;
 import static org.task.pilot.persistance.EventType.APPROVED;
 
 @ApplicationScoped
@@ -28,7 +29,7 @@ public class ApprovePromotionHandler implements CommandHandler<ApprovePromotion,
   @WithTransaction
   public Uni<Void> handle(ApprovePromotion command) {
     if (!approverRepository.isApprover(command.approverId())) {
-      return Uni.createFrom().failure(new IllegalStateException("No approver rights"));
+      return Uni.createFrom().failure(webForbidden("No approver rights"));
     }
 
     return eventStore.loadEvents(command.promotionId())

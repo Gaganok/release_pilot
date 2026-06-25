@@ -1,11 +1,14 @@
 package org.task.pilot.persistance;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
+import io.quarkus.panache.common.Page;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.persistence.PersistenceException;
 import org.hibernate.exception.ConstraintViolationException;
 import org.task.pilot.domain.event.PromotionEvent;
+import org.task.pilot.domain.model.ResultPage;
 
 import java.util.List;
 import java.util.UUID;
@@ -21,7 +24,7 @@ public class EventStore {
 
   public Uni<Void> append(PromotionEvent event, EventType type) {
     return nextVersion(event.promotionId())
-        .map(version -> EventEntity.from(event.promotionId(), type, version, serialise(event)))
+        .map(version -> EventEntity.from(event.promotionId(), event.applicationId(), type, version, serialise(event)))
         .flatMap(entity -> entity.persist())
         .replaceWithVoid()
         .onFailure(this::isUniqueConstraintViolation)
@@ -35,6 +38,26 @@ public class EventStore {
         .list();
 
     return events.map(this::toPromotionEvents);
+  }
+
+  @WithTransaction
+  public Uni<ResultPage<PromotionEvent>> loadApplicationHistory(UUID applicationId, int pageIndex, int pageSize) {
+    var query = EventEntity.<EventEntity>find("applicationId = ?1 ORDER BY timestamp DESC, version DESC", applicationId)
+        .page(Page.of(pageIndex, pageSize));
+
+    return Uni.combine().all().unis(query.list(), query.count()).asTuple()
+        .map(tuple -> {
+          List<EventEntity> entities = tuple.getItem1();
+          long totalCount = tuple.getItem2();
+
+          List<PromotionEvent> domainEvents = entities.stream()
+              .map(this::deserialise)
+              .toList();
+
+          int totalPages = (int) Math.ceil((double) totalCount / pageSize);
+
+          return new ResultPage<>(pageIndex, pageSize, totalCount, totalPages, domainEvents);
+        });
   }
 
   private Uni<Long> nextVersion(UUID aggregateId) {
